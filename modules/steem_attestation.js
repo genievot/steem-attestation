@@ -10,7 +10,7 @@ function retryPostingAttestations() {
 	if (!exports.steemAttestorAddress)
 		throw Error('no steemAttestorAddress');
 	db.query(
-		`SELECT transaction_id, user_address, username, reputation, post_publicly
+		`SELECT transaction_id, user_address, username, reputation, post_publicly, node_id
 		FROM attestation_units
 		JOIN transactions USING(transaction_id)
 		JOIN receiving_addresses USING(receiving_address)
@@ -23,7 +23,8 @@ function retryPostingAttestations() {
 					row.user_address,
 					row.username,
 					row.reputation,
-					row.post_publicly
+					row.post_publicly,
+					row.node_id
 				);
 				// console.error('retryPostingAttestations: ' + row.transaction_id + ' ' + row.post_publicly);
 				// console.error(attestation);
@@ -63,7 +64,7 @@ function postAndWriteAttestation(transaction_id, attestor_address, attestation_p
 						[unit, transaction_id],
 						() => {
 							let device = require('ocore/device.js');
-							let text = "Now your steem username is attested, see the attestation unit: https://explorer.obyte.org/#"+unit;
+							let text = "Now your github username is attested, see the attestation unit: https://explorer.obyte.org/#"+unit;
 
 							if (src_profile) {
 								let private_profile = {
@@ -73,7 +74,7 @@ function postAndWriteAttestation(transaction_id, attestor_address, attestation_p
 								};
 								let base64PrivateProfile = Buffer.from(JSON.stringify(private_profile)).toString('base64');
 								text += "\n\nClick here to save the profile in your wallet: [private profile](profile:"+base64PrivateProfile+"). " +
-									"You will be able to use it to access the services that require a proven steem username.";
+									"You will be able to use it to access the services that require a proven github username.";
 							}
 
 							text += "\n\n" + texts.weHaveReferralProgram(row.user_address);
@@ -141,15 +142,16 @@ function postAttestation(attestor_address, payload, onDone) {
 
 function getUserId(profile){
 	let shortProfile = {
-		steem_username: profile.steem_username,
+		steem_username: profile.github_username,
 	};
 	return objectHash.getBase64Hash([shortProfile, conf.salt]);
 }
 
-function getAttestationPayloadAndSrcProfile(user_address, steem_username, reputation, bPublic) {
+function getAttestationPayloadAndSrcProfile(user_address, github_username, reputation, bPublic, node_id) {
 	let profile = {
-		steem_username: steem_username,
-		reputation: reputation
+		github_username: github_username,
+		reputation: reputation,
+		node_id: node_id
 	};
 	if (bPublic) {
 		profile.user_id = getUserId(profile);

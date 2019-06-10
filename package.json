@@ -1,5 +1,5 @@
 {
-	"name": "steem-attestation",
+	"name": "Github attestation",
 	"version": "1.0.0",
 	"description": "An Obyte bot for attestation of steem username",
 	"main": "attestation.js",
@@ -7,12 +7,13 @@
 	"author": "tony",
 	"license": "MIT",
 	"dependencies": {
+		"axios": "0.19.0",
 		"body-parser": "1.18.3",
-		"obyte-witness": "git+https://github.com/byteball/obyte-witness.git",
-		"ocore": "git+https://github.com/byteball/ocore.git",
 		"cookie-parser": "1.4.3",
 		"express": "4.16.2",
 		"headless-obyte": "git+https://github.com/byteball/headless-obyte.git",
+		"obyte-witness": "git+https://github.com/byteball/obyte-witness.git",
+		"ocore": "git+https://github.com/byteball/ocore.git",
 		"request": "2.83.0",
 		"sc2-sdk": "^1.0.2"
 	}

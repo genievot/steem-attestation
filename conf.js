@@ -3,15 +3,15 @@
 exports.port = null;
 //exports.myUrl = 'wss://mydomain.com/bb';
 exports.bServeAsHub = false;
-exports.bLight = false;
+exports.bLight = true;
 
 exports.storage = 'sqlite';
 
 // TOR is recommended. If you don't run TOR, please comment the next two lines
-exports.socksHost = '127.0.0.1';
-exports.socksPort = 9050;
+// exports.socksHost = '127.0.0.1';
+// exports.socksPort = 9050;
 
-exports.hub = process.env.testnet ? 'obyte.org/bb-test' : 'obyte.org/bb';
+exports.hub = 'obyte.org/bb';
 exports.deviceName = 'Steem attestation bot';
 exports.permanent_pairing_secret = '*';
 exports.control_addresses = [''];
@@ -37,15 +37,16 @@ exports.bAcceptUnconfirmedPayments = true;
 exports.MAX_REFERRAL_DEPTH = 5;
 
 exports.arrReputationRewardsInUsd = [
-//	{threshold: 25, rewardInUsd: 0.02},
-//	{threshold: 35, rewardInUsd: 5},
-//	{threshold: 45, rewardInUsd: 10},
-//	{threshold: 55, rewardInUsd: 10},
-	{threshold: 60, rewardInUsd: 20},
-	{threshold: 70, rewardInUsd: 160},
+	{threshold: 1, rewardInUsd: 2},
+	{threshold: 4, rewardInUsd: 5},
+	{threshold: 8, rewardInUsd: 10},
+	{threshold: 10, rewardInUsd: 15},
+	{threshold: 15, rewardInUsd: 20},
+	{threshold: 25, rewardInUsd: 160},
 ];
 
 exports.signingRewardShare = 1;
+
 
 exports.rewardContractShare = 0.5;
 exports.referralRewardContractShare = 0.75;
@@ -62,3 +63,7 @@ exports.steemconnectApp = 'byteballapp';
 exports.steemconnectRedirectUrl = exports.site + '/done';
 
 exports.webPort = 8080;
+
+//add below values to env file later...
+exports.clientID = '5894acabdbccc52a84e7'
+exports.clientSecret = '313d5c58cfe54f76c82d02a8edce585317f3a8d4'

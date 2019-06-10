@@ -17,13 +17,12 @@ const crypto = require('crypto');
 const express = require('express');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
-
+const axios = require('axios')
 let api = sc2.Initialize({
 	app: conf.steemconnectApp,
 	callbackURL: conf.steemconnectRedirectUrl,
 	scope: ['login']
 });
-
 function startWebServer(){
 	const app = express();
 	const server = require('http').Server(app);
@@ -31,10 +30,33 @@ function startWebServer(){
 	app.use(cookieParser());
 	app.use(bodyParser.urlencoded({ extended: false }));
 
+	app.get('/redirect', (req, res) => {
+		const requestToken = req.query.code
+		const state = req.query.state
+	  axios({
+	    // make a POST request
+	    method: 'post',
+	    // to the Github authentication API, with the client ID, client secret
+	    // and request token
+	    url: `https://github.com/login/oauth/access_token?client_id=${conf.clientID}&state=${state}&client_secret=${conf.clientSecret}&code=${requestToken}`,
+	    // Set the content type header, so that we get the response in JSOn
+	    headers: {
+	         accept: 'application/json'
+	    }
+	  }).then((response) => {
+	    // Once we get the response, extract the access token from
+	    // the response body
+	    const accessToken = response.data.access_token
+	    // redirect the user to the welcome page, along with the access token
+	    res.redirect(`/done?state=${req.query.state}&access_token=${accessToken}`)
+	  })
+	})
+
 	app.get('/done', (req, res) => {
 		let device = require('ocore/device.js');
 		let query = req.query;
 		let cookies = req.cookies;
+		console.error(req.cookies);
 		console.error('received request', query);
 		if (!query.access_token || !query.state)
 			return res.send("no access_token or unique_id");
@@ -43,28 +65,39 @@ function startWebServer(){
 				return res.send("no such unique_id");
 			let userInfo = rows[0];
 			if (cookies.referrer && validationUtils.isValidAddress(cookies.referrer)){
-				db.query("INSERT "+db.getIgnore()+" INTO link_referrals (referring_user_address, device_address, type) VALUES(?, ?, 'cookie')", 
+				db.query("INSERT "+db.getIgnore()+" INTO link_referrals (referring_user_address, device_address, type) VALUES(?, ?, 'cookie')",
 					[cookies.referrer, userInfo.device_address]);
 			}
 			if (!userInfo.user_address){
 				device.sendMessageToDevice(userInfo.device_address, 'text', texts.insertMyAddress());
 				return res.send("Please return to chat, insert your address, and try again");
 			}
-			api.setAccessToken(query.access_token);
-			api.me((err, meResult) => {
-				console.error(err, meResult);
+			axios({
+	    // make a POST request
+	    method: 'get',
+	    // to the Github authentication API, with the client ID, client secret
+	    // and request token
+	    url: `https://api.github.com/user`,
+	    // Set the content type header, so that we get the response in JSOn
+	    headers: {
+	         Authorization: 'token ' + query.access_token
+	    }}).then((meResult)=>{
+				console.error(meResult);
 				if (err)
-					return res.send("failed to get your steem profile");
-				let is_eligible = (meResult.account.created < '2018-07-12');
-				let username = meResult.account.name;
-				let reputation = meResult.account.reputation;
-				let log_reputation = Math.floor( Math.max(Math.log10(Math.abs(reputation)) - 9, 0) * ( (reputation >= 0) ? 1 : -1) * 9 ) + 25;
+					return res.send("failed to get your github profile");
+				let is_eligible = (meResult.account.created_at < '2019-05-12'); // 2018-07-12 indicates Jul 12 and this May 12 of 2019
+				console.error(is_eligible);
+				let username = meResult.data.login;
+				let node_id = meResult.data.node_id
+				let reputation = meResult.public_repos;
+				let log_reputation = meResult.public_repos;
+				// Math.floor( Math.max(Math.log10(Math.abs(reputation)) - 9, 0) * ( (reputation >= 0) ? 1 : -1) * 9 ) + 25;
 				db.query("UPDATE users SET username=? WHERE device_address=?", [username, userInfo.device_address], () => {
 					userInfo.username = username;
 					readOrAssignReceivingAddress(userInfo, (receiving_address, post_publicly) => {
-						db.query("UPDATE receiving_addresses SET reputation=?, is_eligible=? WHERE receiving_address=?", [log_reputation, is_eligible, receiving_address]);
+						db.query("UPDATE receiving_addresses SET node_id=? reputation=?, is_eligible=? WHERE receiving_address=?", [node_id, log_reputation, is_eligible, receiving_address]);
 
-						let response = "Your steem username is "+username+".\n\n";
+						let response = "Your github username is "+username+".\n\n";
 						let challenge = username + ' ' + userInfo.user_address;
 						if (post_publicly === null)
 							response += texts.privateOrPublic();
@@ -75,7 +108,10 @@ function startWebServer(){
 					});
 				});
 				res.sendFile(__dirname+'/done.html');
-			});
+			})
+			// api.setAccessToken(query.access_token);
+			// api.me((err, meResult) => {
+			// });
 		});
 	});
 
@@ -93,13 +129,13 @@ eventBus.on('paired', (from_address, pairing_secret) => {
 		return console.log("pairing without referrer in pairing code");
 	let referring_user_address = pairing_secret;
 	db.query(
-		"SELECT 1 FROM attestations WHERE address=? AND attestor_address=?", 
-		[referring_user_address, steemAttestation.steemAttestorAddress], 
+		"SELECT 1 FROM attestations WHERE address=? AND attestor_address=?",
+		[referring_user_address, steemAttestation.steemAttestorAddress],
 		rows => {
 			if (rows.length === 0)
 				return console.log("referrer "+referring_user_address+" not attested, ignoring referrer pairing code");
 			console.log("paired device "+from_address+" fererred by "+referring_user_address);
-			db.query("INSERT "+db.getIgnore()+" INTO link_referrals (referring_user_address, device_address, type) VALUES(?, ?, 'pairing')", 
+			db.query("INSERT "+db.getIgnore()+" INTO link_referrals (referring_user_address, device_address, type) VALUES(?, ?, 'pairing')",
 				[referring_user_address, from_address]);
 		}
 	);
@@ -111,6 +147,7 @@ eventBus.on('paired', (from_address, pairing_secret) => {
 eventBus.once('headless_and_rates_ready', () => {  // we need rates to handle some messages
 	const headlessWallet = require('headless-obyte');
 	eventBus.on('text', (from_address, text) => {
+		//console.error(userInfo.unique_id);
 		respond(from_address, text.trim());
 	});
 	if (conf.bRunWitness) {
@@ -168,7 +205,7 @@ function handleWalletReady() {
 
 		const headlessWallet = require('headless-obyte');
 		headlessWallet.issueOrSelectAddressByIndex(0, 0, (address1) => {
-			console.log('== steem attestation address: ' + address1);
+			console.log('== github attestation address: ' + address1);
 			steemAttestation.steemAttestorAddress = address1;
 
 			headlessWallet.issueOrSelectAddressByIndex(0, 1, (address2) => {
@@ -178,10 +215,10 @@ function handleWalletReady() {
 				setInterval(steemAttestation.retryPostingAttestations, 60*1000);
 				setInterval(reward.retrySendingRewards, 60*1000);
 				setInterval(moveFundsToAttestorAddresses, 60*1000);
-				
+
 				const consolidation = require('headless-obyte/consolidation.js');
 				consolidation.scheduleConsolidation(steemAttestation.steemAttestorAddress, headlessWallet.signer, 100, 3600*1000);
-				
+
 				startWebServer();
 			});
 		});
@@ -199,8 +236,8 @@ function moveFundsToAttestorAddresses() {
 		db.query(
 			`SELECT * FROM (
 				SELECT DISTINCT receiving_address
-				FROM receiving_addresses 
-				CROSS JOIN outputs ON receiving_address = address 
+				FROM receiving_addresses
+				CROSS JOIN outputs ON receiving_address = address
 				JOIN units USING(unit)
 				WHERE is_stable=1 AND is_spent=0 AND asset IS NULL
 			) AS t
@@ -250,7 +287,7 @@ function handleNewTransactions(arrUnits) {
 	db.query(
 		`SELECT
 			amount, asset, unit,
-			receiving_address, device_address, user_address, username, price, 
+			receiving_address, device_address, user_address, username, price,
 			${db.getUnixTimestamp('last_price_date')} AS price_ts
 		FROM outputs
 		CROSS JOIN receiving_addresses ON receiving_addresses.receiving_address = outputs.address
@@ -317,7 +354,7 @@ function checkPayment(row, onDone) {
 	function resetUserAddress(){
 		db.query("UPDATE users SET user_address=NULL WHERE device_address=?", [row.device_address]);
 	}
-	
+
 	db.query("SELECT address FROM unit_authors WHERE unit=?", [row.unit], (author_rows) => {
 		if (author_rows.length !== 1){
 			resetUserAddress();
@@ -334,7 +371,7 @@ function checkPayment(row, onDone) {
 function handleTransactionsBecameStable(arrUnits) {
 	let device = require('ocore/device.js');
 	db.query(
-		`SELECT transaction_id, device_address, user_address, username, reputation, is_eligible, post_publicly, payment_unit
+		`SELECT transaction_id, device_address, user_address, username, reputation, node_id, is_eligible, post_publicly, payment_unit
 		FROM accepted_payments
 		JOIN receiving_addresses USING(receiving_address)
 		WHERE payment_unit IN(?)`,
@@ -372,6 +409,7 @@ function attest(row, proof_type){
 					row.user_address,
 					row.username,
 					row.reputation,
+					row.node_id,
 					row.post_publicly
 				);
 
@@ -388,10 +426,10 @@ function attest(row, proof_type){
 
 				if (row.is_eligible === 0){
 					console.log('user '+row.username+' '+row.user_address+' is not eligible for reward');
-					device.sendMessageToDevice(row.device_address, 'text', "You are not eligible for attestation reward as your account was created after Jul 12, but you can still refer new users and earn referral rewards.");
+					device.sendMessageToDevice(row.device_address, 'text', "You are not eligible for attestation reward as your account was created after May 12, but you can still refer new users and earn referral rewards.");
 					return unlock();
 				}
-				
+
 				if (proof_type === 'signature')
 					rewardInUSD *= conf.signingRewardShare;
 
@@ -409,7 +447,7 @@ function attest(row, proof_type){
 							console.log(`duplicate user_address or user_id: ${row.user_address}, ${attestation.profile.user_id}`);
 							return unlock();
 						}
-						
+
 						let [contract_address, vesting_ts] = await contract.createContract(row.user_address, row.device_address);
 						device.sendMessageToDevice(row.device_address, 'text', texts.attestedFirstTimeBonus(rewardInUSD, rewardInBytes, contractRewardInBytes, vesting_ts));
 						reward.sendAndWriteReward('attestation', transaction_id);
@@ -418,9 +456,9 @@ function attest(row, proof_type){
 						if (!referralRewardInUSD)
 							return unlock();
 
-						let referralRewardInBytes = 
+						let referralRewardInBytes =
 							conversion.getPriceInBytes(referralRewardInUSD * (1-conf.referralRewardContractShare));
-						let contractReferralRewardInBytes = 
+						let contractReferralRewardInBytes =
 							conversion.getPriceInBytes(referralRewardInUSD * conf.referralRewardContractShare);
 						reward.findReferrer(
 							row.payment_unit, row.user_address, row.device_address,
@@ -430,7 +468,7 @@ function attest(row, proof_type){
 									console.log("no referring user for " + row.user_address);
 									return unlock();
 								}
-								let [referrer_contract_address, referrer_vesting_date_ts] = 
+								let [referrer_contract_address, referrer_vesting_date_ts] =
 									await contract.getReferrerContract(referring_user_address, referring_user_device_address);
 
 								db.query(
@@ -475,6 +513,7 @@ function respond(from_address, text, response = '') {
 	let device = require('ocore/device.js');
 	const mutex = require('ocore/mutex.js');
 	readUserInfo(from_address, (userInfo) => {
+		console.error(userInfo);
 
 		function checkUserAddress(onDone) {
 			if (validationUtils.isValidAddress(text)) {
@@ -497,7 +536,9 @@ function respond(from_address, text, response = '') {
 		function checkUsername(onDone) {
 			if (userInfo.username)
 				return onDone();
-			let link = api.getLoginURL(userInfo.unique_id);
+			let link = `https://github.com/login/oauth/authorize?client_id=${conf.clientID}&state=${userInfo.unique_id}&redirect_uri=http://github-obyte.glitch.com/redirect`
+			// api.getLoginURL(userInfo.unique_id);
+			console.log(userInfo.unique_id);
 			onDone(texts.proveUsername(link));
 		}
 
@@ -515,8 +556,8 @@ function respond(from_address, text, response = '') {
 					if (text === 'private' || text === 'public') {
 						post_publicly = (text === 'public') ? 1 : 0;
 						db.query(
-							`UPDATE receiving_addresses 
-							SET post_publicly=? 
+							`UPDATE receiving_addresses
+							SET post_publicly=?
 							WHERE device_address=? AND user_address=? AND username=?`,
 							[post_publicly, from_address, userInfo.user_address, userInfo.username]
 						);
@@ -528,7 +569,8 @@ function respond(from_address, text, response = '') {
 
 					let challenge = userInfo.username + ' ' + userInfo.user_address;
 					if (text === 'again') {
-						let link = api.getLoginURL(userInfo.unique_id);
+						let link = `https://github.com/login/oauth/authorize?client_id=${conf.clientID}&state=${userInfo.unique_id}&redirect_uri=http://github-obyte.glitch.com/redirect`
+						// api.getLoginURL(userInfo.unique_id);
 						return device.sendMessageToDevice( from_address, 'text', (response ? response + '\n\n' : '') + texts.proveUsername(link) );
 					}
 
@@ -553,13 +595,13 @@ function respond(from_address, text, response = '') {
 							if (objSignedMessage.authors[0].address !== userInfo.user_address)
 								return device.sendMessageToDevice(from_address, 'text', "You signed the message with a wrong address: "+objSignedMessage.authors[0].address+", expected: "+userInfo.user_address);
 							db.query(
-								"SELECT 1 FROM signed_messages WHERE user_address=? AND creation_date>"+db.addTime('-1 DAY'), 
+								"SELECT 1 FROM signed_messages WHERE user_address=? AND creation_date>"+db.addTime('-1 DAY'),
 								[userInfo.user_address],
 								rows => {
 									if (rows.length > 0)
 										return device.sendMessageToDevice(from_address, 'text', "You are already attested.");
 									db.query(
-										`INSERT INTO transactions (receiving_address, proof_type) VALUES (?, 'signature')`, 
+										`INSERT INTO transactions (receiving_address, proof_type) VALUES (?, 'signature')`,
 										[receiving_address],
 										(res) => {
 											let transaction_id = res.insertId;
@@ -568,7 +610,7 @@ function respond(from_address, text, response = '') {
 												[transaction_id, userInfo.user_address, signedMessageJson],
 												() => {
 													db.query(
-														`SELECT device_address, user_address, username, reputation, is_eligible, post_publicly
+														`SELECT device_address, user_address, username, reputation, node_id, is_eligible, post_publicly
 														FROM receiving_addresses WHERE receiving_address=?`,
 														[receiving_address],
 														rows => {
@@ -588,7 +630,7 @@ function respond(from_address, text, response = '') {
 						});
 						return;
 					}
-					
+
 					db.query(
 						`SELECT transaction_id, is_confirmed, received_amount, user_address, username, attestation_date
 						FROM accepted_payments
@@ -606,7 +648,7 @@ function respond(from_address, text, response = '') {
 								return device.sendMessageToDevice(
 									from_address,
 									'text',
-									(response ? response + '\n\n' : '') + 
+									(response ? response + '\n\n' : '') +
 										texts.pleasePayOrPrivacy(receiving_address, price, challenge, post_publicly)
 								);
 							}
@@ -627,7 +669,7 @@ function respond(from_address, text, response = '') {
 
 							if (text === 'private' || text === 'public')
 								return device.sendMessageToDevice(from_address, 'text', response);
-							
+
 							device.sendMessageToDevice(from_address, 'text', (response ? response + '\n\n' : '') + texts.alreadyAttested(row.attestation_date));
 						}
 					);
@@ -647,8 +689,8 @@ function respond(from_address, text, response = '') {
  */
 function readUserInfo(device_address, callback) {
 	db.query(
-		`SELECT users.user_address, receiving_addresses.username, unique_id, users.device_address 
-		FROM users LEFT JOIN receiving_addresses USING(device_address, user_address) 
+		`SELECT users.user_address, receiving_addresses.username, unique_id, users.device_address
+		FROM users LEFT JOIN receiving_addresses USING(device_address, user_address)
 		WHERE device_address = ?`,
 		[device_address],
 		(rows) => {
@@ -676,7 +718,7 @@ function readOrAssignReceivingAddress(userInfo, callback) {
 	mutex.lock([userInfo.device_address], (unlock) => {
 		db.query(
 			`SELECT receiving_address, post_publicly, ${db.getUnixTimestamp('last_price_date')} AS price_ts
-			FROM receiving_addresses 
+			FROM receiving_addresses
 			WHERE device_address=? AND user_address=? AND username=?`,
 			[userInfo.device_address, userInfo.user_address, userInfo.username],
 			(rows) => {
@@ -689,8 +731,8 @@ function readOrAssignReceivingAddress(userInfo, callback) {
 				const headlessWallet = require('headless-obyte');
 				headlessWallet.issueNextMainAddress((receiving_address) => {
 					db.query(
-						`INSERT INTO receiving_addresses 
-						(device_address, user_address, username, receiving_address, price, last_price_date) 
+						`INSERT INTO receiving_addresses
+						(device_address, user_address, username, receiving_address, price, last_price_date)
 						VALUES(?,?,?, ?, ?,${db.getNow()})`,
 						[userInfo.device_address, userInfo.user_address, userInfo.username, receiving_address, conf.priceInBytes],
 						() => {
