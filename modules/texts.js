@@ -7,7 +7,7 @@ const conf = require('ocore/conf');
  * responses for clients
  */
 exports.greeting = () => {
-	let rewards = conf.arrReputationRewardsInUsd.map(bracket => "Reputation "+bracket.threshold+" or above: $"+bracket.rewardInUsd.toLocaleString([], {minimumFractionDigits: 2})+" reward").join("\n");
+	let rewards = conf.arrReputationRewardsInUsd.map(bracket => "Public Repositories "+bracket.threshold+" or above: $"+bracket.rewardInUsd.toLocaleString([], {minimumFractionDigits: 2})+" reward").join("\n");
 	return [
 		"Here you can attest your github username.\n\n",
 
@@ -47,7 +47,7 @@ exports.insertMyAddress = () => {
 
 
 exports.goingToAttestAddress = (address) => {
-	return `Thanks, going to attest your BB address: ${address}.`;
+	return `Thanks, going to attest your OB address: ${address}.`;
 };
 
 exports.privateOrPublic = () => {

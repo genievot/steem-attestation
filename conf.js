@@ -12,7 +12,7 @@ exports.storage = 'sqlite';
 // exports.socksPort = 9050;
 
 exports.hub = 'obyte.org/bb';
-exports.deviceName = 'Steem attestation bot';
+exports.deviceName = 'Github Attestation Bot';
 exports.permanent_pairing_secret = '*';
 exports.control_addresses = [''];
 exports.payout_address = 'WHERE THE MONEY CAN BE SENT TO';
@@ -37,12 +37,12 @@ exports.bAcceptUnconfirmedPayments = true;
 exports.MAX_REFERRAL_DEPTH = 5;
 
 exports.arrReputationRewardsInUsd = [
-	{threshold: 1, rewardInUsd: 2},
-	{threshold: 4, rewardInUsd: 5},
-	{threshold: 8, rewardInUsd: 10},
-	{threshold: 10, rewardInUsd: 15},
-	{threshold: 15, rewardInUsd: 20},
-	{threshold: 25, rewardInUsd: 160},
+	// {threshold: 1, rewardInUsd: 2},
+	// {threshold: 4, rewardInUsd: 5},
+	// {threshold: 8, rewardInUsd: 10},
+	// {threshold: 10, rewardInUsd: 15},
+	// {threshold: 15, rewardInUsd: 0},
+	// {threshold: 25, rewardInUsd: 0},
 ];
 
 exports.signingRewardShare = 1;

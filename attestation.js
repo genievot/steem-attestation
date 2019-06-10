@@ -46,21 +46,25 @@ function startWebServer(){
 	  }).then((response) => {
 	    // Once we get the response, extract the access token from
 	    // the response body
-	    const accessToken = response.data.access_token
+	    let accessToken = response.data.access_token
 	    // redirect the user to the welcome page, along with the access token
-	    res.redirect(`/done?state=${req.query.state}&access_token=${accessToken}`)
-	  })
+			let urir = `/done?state=`+req.query.state+`&access_token=${accessToken}`
+	    res.redirect(urir)
+	  }).catch((err) => {
+			console.error(err);
+		})
 	})
 
 	app.get('/done', (req, res) => {
 		let device = require('ocore/device.js');
 		let query = req.query;
 		let cookies = req.cookies;
-		console.error(req.cookies);
+		// console.error(req.cookies);
 		console.error('received request', query);
 		if (!query.access_token || !query.state)
 			return res.send("no access_token or unique_id");
-		db.query("SELECT device_address, user_address FROM users WHERE unique_id=?", [query.state], rows => {
+		db.query("SELECT device_address, user_address FROM users WHERE unique_id=?", [query.state.replace(' ', '+')], rows => {
+			console.error(rows);
 			if (rows.length === 0)
 				return res.send("no such unique_id");
 			let userInfo = rows[0];
@@ -82,20 +86,20 @@ function startWebServer(){
 	    headers: {
 	         Authorization: 'token ' + query.access_token
 	    }}).then((meResult)=>{
-				console.error(meResult);
-				if (err)
+				// console.error(meResult);
+				if (!meResult)
 					return res.send("failed to get your github profile");
-				let is_eligible = (meResult.account.created_at < '2019-05-12'); // 2018-07-12 indicates Jul 12 and this May 12 of 2019
+				let is_eligible = (meResult.data.created_at < '2019-05-12'); // 2018-07-12 indicates Jul 12 and this May 12 of 2019
 				console.error(is_eligible);
 				let username = meResult.data.login;
-				let node_id = meResult.data.node_id
+				let node_id = meResult.data.node_id;
 				let reputation = meResult.public_repos;
 				let log_reputation = meResult.public_repos;
 				// Math.floor( Math.max(Math.log10(Math.abs(reputation)) - 9, 0) * ( (reputation >= 0) ? 1 : -1) * 9 ) + 25;
 				db.query("UPDATE users SET username=? WHERE device_address=?", [username, userInfo.device_address], () => {
 					userInfo.username = username;
 					readOrAssignReceivingAddress(userInfo, (receiving_address, post_publicly) => {
-						db.query("UPDATE receiving_addresses SET node_id=? reputation=?, is_eligible=? WHERE receiving_address=?", [node_id, log_reputation, is_eligible, receiving_address]);
+						db.query("UPDATE receiving_addresses SET node_id=?, reputation=?, is_eligible=? WHERE receiving_address=?", [node_id, log_reputation, is_eligible, receiving_address]);
 
 						let response = "Your github username is "+username+".\n\n";
 						let challenge = username + ' ' + userInfo.user_address;
@@ -108,6 +112,8 @@ function startWebServer(){
 					});
 				});
 				res.sendFile(__dirname+'/done.html');
+			}).catch((err) => {
+				console.error(err);
 			})
 			// api.setAccessToken(query.access_token);
 			// api.me((err, meResult) => {

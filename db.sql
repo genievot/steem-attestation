@@ -13,7 +13,7 @@ CREATE TABLE receiving_addresses (
 	user_address CHAR(32) NOT NULL,
 	username VARCHAR(64) NOT NULL,
 	reputation INT NULL,
-	node_id CHAR(33) NOT NULL,
+	node_id VARCHAR(64) NULL,
 	is_eligible TINYINT NULL,
 	creation_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	post_publicly TINYINT NULL,
